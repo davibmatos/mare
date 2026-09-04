@@ -1,0 +1,232 @@
+openapi: 3.1.0
+info:
+  title: API Mar(é)
+  version: 0.1.0
+  description: Contrato inicial para o MVP da plataforma de conexão com o oceano.
+servers:
+  - url: https://api.example.invalid/v1
+    description: Endereço ilustrativo; ainda não existe backend publicado.
+tags:
+  - name: Auth
+  - name: Locations
+  - name: Activities
+  - name: Administration
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Autenticar usuário
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: {type: string, format: email}
+                password: {type: string, minLength: 8}
+      responses:
+        '200':
+          description: Sessão autenticada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /me:
+    get:
+      tags: [Auth]
+      security: [{bearerAuth: []}]
+      summary: Obter usuário autenticado
+      responses:
+        '200':
+          description: Usuário
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+  /locations:
+    get:
+      tags: [Locations]
+      security: [{bearerAuth: []}]
+      summary: Listar localidades monitoradas
+      responses:
+        '200':
+          description: Localidades
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Location'}
+  /locations/{locationId}/bathing-water/latest:
+    get:
+      tags: [Locations]
+      security: [{bearerAuth: []}]
+      summary: Obter publicação oficial mais recente
+      parameters:
+        - $ref: '#/components/parameters/LocationId'
+      responses:
+        '200':
+          description: Referência oficial, incluindo validade e fonte
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BathingWaterReport'}
+        '404': {description: Nenhuma publicação disponível}
+  /activities:
+    get:
+      tags: [Activities]
+      security: [{bearerAuth: []}]
+      summary: Listar atividades do aluno autenticado
+      responses:
+        '200':
+          description: Atividades
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Activity'}
+    post:
+      tags: [Activities]
+      security: [{bearerAuth: []}]
+      summary: Registrar atividade e observação ambiental
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ActivityInput'}
+      responses:
+        '201':
+          description: Atividade criada
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Activity'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /admin/bathing-water-reports:
+    post:
+      tags: [Administration]
+      security: [{bearerAuth: []}]
+      summary: Cadastrar ou importar publicação oficial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BathingWaterReportInput'}
+      responses:
+        '201': {description: Publicação cadastrada}
+        '403': {description: Perfil sem permissão}
+  /admin/notices:
+    post:
+      tags: [Administration]
+      security: [{bearerAuth: []}]
+      summary: Publicar aviso da escola
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, body]
+              properties:
+                title: {type: string, maxLength: 180}
+                body: {type: string, maxLength: 3000}
+                endsAt: {type: [string, 'null'], format: date-time}
+      responses:
+        '201': {description: Aviso publicado}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
+  parameters:
+    LocationId:
+      name: locationId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    ValidationError:
+      description: Dados inválidos
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: {type: string}
+              errors: {type: object, additionalProperties: true}
+  schemas:
+    User:
+      type: object
+      required: [id, name, email, role]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        email: {type: string, format: email}
+        role: {type: string, enum: [admin, student]}
+        schoolId: {type: [string, 'null'], format: uuid}
+    AuthSession:
+      type: object
+      required: [token, user]
+      properties:
+        token: {type: string}
+        user: {$ref: '#/components/schemas/User'}
+    Location:
+      type: object
+      required: [id, name, city, state]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        city: {type: string}
+        state: {type: string, minLength: 2, maxLength: 2}
+        latitude: {type: [number, 'null']}
+        longitude: {type: [number, 'null']}
+    BathingWaterReport:
+      type: object
+      required: [id, locationId, status, sourceName, samplingPoint, publishedAt]
+      properties:
+        id: {type: string, format: uuid}
+        locationId: {type: string, format: uuid}
+        status: {type: string, enum: [suitable, unsuitable, unknown]}
+        sourceName: {type: string}
+        sourceUrl: {type: [string, 'null'], format: uri}
+        samplingPoint: {type: string}
+        sampledAt: {type: [string, 'null'], format: date-time}
+        publishedAt: {type: string, format: date-time}
+        validUntil: {type: [string, 'null'], format: date-time}
+        isExpired: {type: boolean}
+    BathingWaterReportInput:
+      allOf:
+        - $ref: '#/components/schemas/BathingWaterReport'
+        - type: object
+          properties:
+            id: false
+            isExpired: false
+    ActivityInput:
+      type: object
+      required: [locationId, modality, activityDate, durationMinutes, visibility]
+      properties:
+        locationId: {type: string, format: uuid}
+        modality: {type: string, maxLength: 100}
+        activityDate: {type: string, format: date}
+        durationMinutes: {type: integer, minimum: 1, maximum: 1440}
+        seaCondition: {type: [string, 'null']}
+        safetyPerception: {type: [integer, 'null'], minimum: 1, maximum: 5}
+        notes: {type: [string, 'null'], maxLength: 3000}
+        visibility: {type: string, enum: [private, school, community]}
+        observation:
+          type: object
+          properties:
+            foundTrash: {type: boolean}
+            trashCategories: {type: array, items: {type: string}}
+            approximateQuantity: {type: [string, 'null']}
+            waterColor: {type: [string, 'null']}
+            odor: {type: [string, 'null']}
+            comment: {type: [string, 'null'], maxLength: 3000}
+    Activity:
+      allOf:
+        - $ref: '#/components/schemas/ActivityInput'
+        - type: object
+          required: [id, createdAt]
+          properties:
+            id: {type: string, format: uuid}
+            createdAt: {type: string, format: date-time}
