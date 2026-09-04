@@ -1,0 +1,32 @@
+name: Validar protótipo
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+
+      - name: Validar JavaScript
+        run: node --check app/app.js
+
+      - name: Validar manifesto PWA
+        run: python -m json.tool app/manifest.webmanifest > /dev/null
+
+      - name: Verificar arquivos essenciais
+        run: |
+          test -f app/index.html
+          test -f app/styles.css
+          test -f app/service-worker.js
+          test -f database/schema.sql
+          test -f api/openapi.yaml
+          test -f docs/PRODUTO.md
